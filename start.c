@@ -243,7 +243,7 @@ int main (int argc, const char** argv)
       int mprot;
       if (segment_filename_to_addr(name, &addr, &mprot))
         die("initialize", "matched filename did not parse", NO);
-      int fd = open(name, oflags_for_mprot(mprot));
+      int fd = openat(segments_dirfd, name, oflags_for_mprot(mprot));
       if (fd == -1) fail("open");
       struct stat st;
       if (fstat(fd, &st)) fail("fstat");
@@ -261,7 +261,6 @@ int main (int argc, const char** argv)
   }
 
   void transfer_control (void) {
-    // TODO: Set registers and whatever else to some initial state?
     entry_point(&sys_iface);
   }
 

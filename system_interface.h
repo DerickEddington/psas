@@ -1,16 +1,18 @@
 #include <unistd.h>
 
-// TODO: All the aligned attributes exist to ensure non-C code can assume fixed
-// offsets for the fields. Is this the right way?
+// TODO: The attributes exist to ensure non-C code can assume fixed offsets for
+// the fields. Is this the best way?
 
-// The procedure pointer fields are aligned at 16-byte for x86_84.
-// TODO: About alignment of other architectures.
-
-struct system_interface
+struct
+__attribute__((packed))
+system_interface
 {
-  void*  (*alloc_segment) (size_t, int)          __attribute__((aligned));
-  int    (*free_segment)  (const void*)          __attribute__((aligned));
-  size_t (*console_read)  (void*, size_t)        __attribute__((aligned));
-  size_t (*console_write) (const void*, size_t)  __attribute__((aligned));
-}
-__attribute__((aligned));
+  void*  (*alloc_segment) (size_t, int)
+    __attribute__((aligned(sizeof(void*))));
+  int    (*free_segment)  (const void*)
+    __attribute__((aligned(sizeof(void*))));
+  size_t (*console_read)  (void*, size_t)
+    __attribute__((aligned(sizeof(void*))));
+  size_t (*console_write) (const void*, size_t)
+    __attribute__((aligned(sizeof(void*))));
+};

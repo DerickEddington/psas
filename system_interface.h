@@ -15,4 +15,6 @@ system_interface
     __attribute__((aligned(sizeof(void*))));
   size_t (*console_write) (const void*, size_t)
     __attribute__((aligned(sizeof(void*))));
+  void   (*exit) (int)
+    __attribute__((aligned(sizeof(void*))));
 };

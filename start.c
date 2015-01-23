@@ -201,7 +201,8 @@ static struct system_interface sys_iface = {
   .alloc_segment = alloc_segment,
   .free_segment  = free_segment,
   .console_read  = console_read,
-  .console_write = console_write
+  .console_write = console_write,
+  .exit          = exit
 };
 
 

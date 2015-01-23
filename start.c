@@ -1,9 +1,3 @@
-// TODO: Make an entry-point segment that serves to bootstrap a persistent
-// address-space.  It'll restore registers from some save-area segment and then
-// jump to save-area's instruction-pointer value, or something.  Maybe the
-// entry-point instructions can assume the save-area segment is 1 page offset
-// from the beginning of the entry-point segment.
-
 // TODO: Review what calls should retry on EINTR
 
 // TODO: Generalize to not assume 64-bit CPU (e.g. for pointer size).
@@ -267,6 +261,7 @@ int main (int argc, const char** argv)
 
   if (argc != 3
       || strlen(argv[1]) == 0
+      // TODO: Support argv[2] having XXXX_XXXX_XXXX_XXXX form.
       || sscanf(argv[2], " %p ", &entry_point) != 1)
     die("main", "invalid arguments", NO);
 

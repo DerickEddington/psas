@@ -35,7 +35,8 @@ proc entry_point:
   mov [save_area_location + save_area.sysif + system_interface.console_write], rax
   mov rax, [carg1_rdi + system_interface.exit]
   mov [save_area_location + save_area.sysif + system_interface.exit], rax
-  ; Copy current other system interface values to fixed-address save-area where
+
+  ; Store global values from this file in fixed-address save-area where
   ; everything knows where to find it.
   lea rax, [rel exit_save]
   mov [save_area_location + save_area.exit_save], rax

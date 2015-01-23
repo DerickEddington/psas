@@ -81,28 +81,39 @@ static void segment_addr_to_filename (const void* addr, int mprot,
 }
 
 
+static int parse_addr (const char* str, const void** addr)
+{
+  char addrstr[16+1];
+  int sfn = sscanf(str, " %4c_%4c_%4c_%4c ",
+                   &addrstr[0], &addrstr[4], &addrstr[8], &addrstr[12]);
+  if (sfn != 4) return YES;
+  addrstr[sizeof(addrstr) - 1] = '\0';
+  //printf("addrstr=%s\n", addrstr);
+  const void* addr_;
+  sfn = sscanf(addrstr, "%p", &addr_);
+  if (sfn != 1) return YES;
+  //printf("addr_=%p\n", addr_);
+  *addr = addr_;
+  return NO;  // No error.
+}
+
+
 static int segment_filename_to_addr (const char* name,
                                      const void** addr,
                                      int* mprot)
 {
-  char addrstr[16+1];
+  if (parse_addr(name, addr)) return YES;
+  //printf("*addr=%p\n", *addr);
   char segR, segW, segX;
-  int sfn = sscanf(name, "%4c_%4c_%4c_%4c_%c%c%c",
-                   &addrstr[0], &addrstr[4], &addrstr[8], &addrstr[12],
+  int sfn = sscanf(&name[SEGMENT_FILENAME_STRSIZE - (3+1)], "%c%c%c",
                    &segR, &segW, &segX);
-  if (sfn != 7) return YES;
-  addrstr[sizeof(addrstr) - 1] = '\0';
-  //printf("addrstr=%s, segR=%c, segW=%c, segX=%c\n", addrstr, segR, segW, segX);
-  const void* addr_;
-  sfn = sscanf(addrstr, "%p", &addr_);
-  if (sfn != 1) return YES;
-  //printf("addr=%p\n", addr_);
+  if (sfn != 3) return YES;
+  //printf("segR=%c, segW=%c, segX=%c\n", segR, segW, segX);
   int mprot_ = 0;
   if (segR != 'R' && segW != 'W' && segX != 'X') mprot_ = PROT_NONE;
   if (segR == 'R') mprot_ |= PROT_READ;
   if (segW == 'W') mprot_ |= PROT_WRITE;
   if (segX == 'X') mprot_ |= PROT_EXEC;
-  *addr = addr_;
   *mprot = mprot_;
   return NO;  // No error.
 }
@@ -261,8 +272,7 @@ int main (int argc, const char** argv)
 
   if (argc != 3
       || strlen(argv[1]) == 0
-      // TODO: Support argv[2] having XXXX_XXXX_XXXX_XXXX form.
-      || sscanf(argv[2], " %p ", &entry_point) != 1)
+      || parse_addr(argv[2], (const void**) &entry_point) )
     die("main", "invalid arguments", NO);
 
   DIR* ds = opendir(argv[1]);

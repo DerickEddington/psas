@@ -38,6 +38,7 @@ case $arch in
     x86-64)
         asm=${ASSEMBLER:-yasm}  # nasm or yasm
         asm_opts=( -I $topdir/arch/$arch/ )
+        SEGFILE_RE='(([0-9A-F]{4})_([0-9A-F]{4})_([0-9A-F]{4})_([0-9A-F]{4}))_([RWX_]{3})'
         # The bootstrap entry-point must be output as raw flat binary so that it
         # can be mmap'ed and used directly.
         do-show $asm -f bin -o boot.bin boot.nasm

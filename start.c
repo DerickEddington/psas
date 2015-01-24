@@ -270,15 +270,35 @@ int main (int argc, const char** argv)
     entry_point(&sys_iface);
   }
 
+  void invalid_args (void) { die("main", "invalid arguments", NO); }
+
+  void fail (const char* msg) { die("main", msg, YES); }
+
   if (argc != 3
       || strlen(argv[1]) == 0
-      || parse_addr(argv[2], (const void**) &entry_point) )
-    die("main", "invalid arguments", NO);
+      || strlen(argv[2]) == 0)
+    invalid_args();
 
   DIR* ds = opendir(argv[1]);
-  if (ds == NULL) die("main", "opendir", YES);
+  if (ds == NULL) fail("opendir");
   segments_dirfd = dirfd(ds);
-  if (segments_dirfd == -1) die("main", "dirfd", YES);
+  if (segments_dirfd == -1) fail("dirfd");
+
+  if (parse_addr(argv[2], (const void**) &entry_point)) {
+    // If it's not an address, expect it to be a symlink to a file whose name is
+    // a segment filename whose address is the entry point.
+    struct stat st;
+    if (fstatat(segments_dirfd, argv[2], &st, AT_SYMLINK_NOFOLLOW))
+      fail("fstatat");
+    char target[st.st_size + 1];
+    ssize_t r = readlinkat(segments_dirfd, argv[2], target, sizeof(target));
+    if (r < 0) fail("readlinkat");
+    if (r > st.st_size) die("main", "stat-readlink race", NO);
+    target[r] = '\0';
+    int mprot;
+    if (segment_filename_to_addr(target, (const void**) &entry_point, &mprot))
+      invalid_args();
+  }
 
   initialize();
   transfer_control();

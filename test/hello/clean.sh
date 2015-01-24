@@ -1,3 +1,8 @@
 # This file is sourced by the main build.sh, in its own sub-shell.
 
-rm -v -f -r arch/*/segments/{save_area,stack}
+for D in arch/*/segments ; do
+    for X in $D/{save_area,stack} ; do
+        L=$(readlink $X)
+        rm -v -f -r $D/$L
+    done
+done

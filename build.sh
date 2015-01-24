@@ -3,28 +3,15 @@
 set -e
 set -u
 
-function do-show {
-    echo "-----------------------------------------------------------------"
-    echo -- "$@"
-    "$@"
-    echo
-}
 
-function disasm {
-    ndisasm ${ndisasm_opts[@]} $1 > ${1%.bin}.disasm
-}
-
-function hexprint {
-    hexdump -C $1 > $1.hexdump
-}
-
-
-topdir=$(pwd)
+topdir=$(readlink -f $(dirname $0))
 
 arch=${ARCH:-x86-64}
 gcc_opts=( -std=gnu99 -O1 -Wall -I $topdir )
 
+source $topdir/helpers.bash
 
+pushd $topdir
 echo "Building..."
 
 
@@ -37,16 +24,14 @@ pushd arch/$arch
 case $arch in
     x86-64)
         asm=${ASSEMBLER:-yasm}  # nasm or yasm
-        asm_opts=( -I $topdir/arch/$arch/ )
-        SEGFILE_RE='(([0-9A-F]{4})_([0-9A-F]{4})_([0-9A-F]{4})_([0-9A-F]{4}))_([RWX_]{3})'
+        asm_opts=( -I $topdir/arch/$arch/ )  # For other scripts.
         # The bootstrap entry-point must be output as raw flat binary so that it
         # can be mmap'ed and used directly.
         do-show $asm -f bin -o boot.bin boot.nasm
-        ndisasm_opts=( -b 64 )
         do-show disasm boot.bin
     ;;
 esac
-popd >/dev/null
+popd
 
 
 # Build utils before tests because the tests needs the utils.
@@ -56,15 +41,14 @@ for F in *.c ; do
     # system.
     do-show gcc ${gcc_opts[@]} -static -o ${F%.c} $F
 done
-popd >/dev/null
-
-# For tests.
-export PATH=$topdir/util:"$PATH"
+popd
 
 # Build tests by delegating to each.
 for T in test/* ; do
     if [ -d $T -a -f $T/build.sh ]; then
-        ( pushd $T && source ./build.sh)
+        ( pushd $T
+          PATH=$topdir/util:"$PATH"
+          source ./build.sh )
     fi
 done
 

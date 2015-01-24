@@ -1,4 +1,5 @@
-# This file is sourced by the main build.sh, in its own sub-shell.
+# This file is source'd, in its own sub-shell, in its directory, by the main
+# build.sh.
 
 pushd arch/$arch
 

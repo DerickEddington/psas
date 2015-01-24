@@ -76,10 +76,14 @@ struc save_area
   .rsp:     resq 1
   .rip:     resq 1
   ; TODO: Whatever other registers that should be saved.
+  .user:
+  ; The rest is available for the user.
+  alignb PAGESIZE
 endstruc
 
-%if save_area_location + save_area_size > 0x7FFFFFFF
-  %error "save_area_size, " save_area_size ", too big."
+%if save_area_location + save_area_size > 0x80000000
+  %assign saz save_area_size
+  %error save_area_size saz is too big.
 %endif
 
 %macro call_sysintf 1

@@ -46,4 +46,5 @@ istruc save_area
   at save_area.rflags,  dq save_area_rflags
   at save_area.rsp,     dq save_area_rsp
   at save_area.rip,     dq save_area_rip
+  ; TODO: Whatever other registers that should be saved.
 iend

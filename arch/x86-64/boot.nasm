@@ -102,3 +102,4 @@ proc exit_save:
   ; TODO: Whatever other registers that should be saved.
   ; Call C procedure to exit the process.
   call_sysintf exit
+  ud2  ; The call should not return.

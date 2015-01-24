@@ -44,9 +44,13 @@ struc system_interface
   .exit:          resq 1
 endstruc
 
-; Save area.
+; Save area.  It is located at a fixed address so that everything else can be
+; hard-coded to expect it to be there.  The location is chosen to be the last
+; page that can be addressed with signed 32-bit absolute-address immediate
+; operands, which allows single-instruction calls to the procedure pointers that
+; it stores.
 
-%define save_area_location 0x7FFFF000
+%define save_area_location 0x80000000 - PAGESIZE
 
 struc save_area
   .sysif: resb system_interface_size

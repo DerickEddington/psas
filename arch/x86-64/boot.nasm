@@ -1,4 +1,4 @@
-%include "conv.nasm"
+%include "psas/conv.nasm"
 
 default abs
 

@@ -1,0 +1,95 @@
+Persistent Single Address Space on Linux
+----------------------------------------
+
+Goal is to provide system that persists across process death and restarting as
+new processes.
+
+NEW: Decided not to have SEGV handler to do own demand paging.  Linux will
+handle all this efficiently.  I'll just mmap all existing segments on start-up,
+mmap new allocations, and munmap freed segments.
+
+
+NOPE unneccessary  (I suppose handlers for all terminating signals should be
+installed to capture registers (and maybe other state?) and msync all the PSAS
+ranges.)
+
+Runtime system installs a signal handler for SIGSEGV which attempts to locate
+appropriate file segment to mmap in, for a faulted unmapped address (other
+SIGSEGV errors won't do this).  The file is searched for in a directory tree
+configured by an environment variable, with directories named as virtual memory
+address prefixes of variable length (to allow variable length segments), and
+whichever segment covers the faulted address is mmap'ed in.
+
+I suppose the runtime should be implemented in C for easiest use of Linux/Posix
+stuff.  The main program will install the signal handler, setup whatever else
+might be needed, and transfer control to a fixed address.
+
+Or, at least for initial experimenting, make the C main be a sort of REPL that
+accepts only a few commands for mmap'ing an address (like above), transferring
+control to an address (and auto mmap'ing it if needed), and munmap'ing.  When
+control returns from a transfer, whatever word-sized value is printed (as hex).
+
+- Will have file-system directory structure for saving mmap'ed segments such
+  that the file/dir names tell what address to map segments at.  Maybe scan it
+  all at startup and use in-memory version (much faster for demand paging),
+  which will require careful syncing back to the dir tree, so would do this
+  syncing immediately upon mmap of new segment or munmap.  Or maybe not do this
+  and just search dir every time, for simplicity's sake.
+
+- Would like to use scsh for updating/managing dir tree (because it would suck
+  in C), so my wrapper around mmap and munmap will need to invoke scsh
+  script(s).  This will be relatively slow, but it won't happen too much I
+  think.  I think I should use absolute pathname to dir tree and expect such
+  scsh scripts to be in that dir, to avoid having to find in PATH everytime.
+  For speed, probably should do my own fork() and execl() instead of using
+  system() or execlp().
+
+- Will need procedures in main C program that do:
+
+  - Startup: get pagesize, call script that scans file segments dir to know its
+    state, install SIGSEGV handler, jump to entry point
+
+  - Allocate new segment on request using mmap and use script to record in dir
+    (and maybe update in-memory version of dir state).
+
+  - From handler, upon SEGV_MAPERR fault, mmap segment from dir (maybe according
+    to in-memory version of dir state).  If not in dir it's a serious error, so
+    maybe do some helpful debugging thing.
+
+  - Deallocate segment on request using munmap and use script to record in dir
+    (and maybe update in-memory version of dir state).
+
+
+- Wanted to use libsigsegv, but I don't like that I don't get access to the
+  additional info in siginfo_t.si_code
+
+- Should use mincore (or maybe mprotect) to check if address ranges are mapped
+  before mmaping them.
+
+- Should compile -static to avoid dynamic loader taking address ranges.
+
+- Seems like Linux doesn't allow anything above 7fff_ffff_ffff, so probably
+  should just let it allocate new mmap'ings where it wants, but still demand
+  fixed address for existing preserved-across-processes mappings.
+
+- "64-bit mode. While this mode produces 64-bit linear addresses, the processor
+  ensures that bits 63:47 of such an address are identical.1 IA-32e paging does
+  not use bits 63:48 of such addresses."
+  -- Seems like below range won't all be usable.
+  So maybe should use:
+  0000_8000_0000_0000 to 0000_ffff_ffff_ffff
+  Which gives 128 terabytes.
+
+- Based on below /proc/self/maps of -static exit.c, I suppose it'll be alright
+  to use the address range:
+  0001_0000_0000_0000 to ffff_ffff_0000_0000
+  Which gives 16776960 terabytes of memory.
+
+00400000-004ac000 r-xp 00000000 08:07 2364157                            /home/share/zone/psas/exit
+006ab000-006ac000 rw-p 000ab000 08:07 2364157                            /home/share/zone/psas/exit
+006ac000-006af000 rw-p 00000000 00:00 0 
+01281000-012a4000 rw-p 00000000 00:00 0                                  [heap]
+7fffe4519000-7fffe453a000 rw-p 00000000 00:00 0                          [stack]
+7fffe45ff000-7fffe4600000 r-xp 00000000 00:00 0                          [vdso]
+ffffffffff600000-ffffffffff601000 r-xp 00000000 00:00 0                  [vsyscall]
+

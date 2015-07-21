@@ -26,6 +26,9 @@ zifnd r15
 zifnd rflags
 zifnd rsp
 zifnd rip
+zifnd user0
+zifnd user1
+zifnd user2
 
 istruc save_area
   at save_area.rax,     dq save_area_rax
@@ -47,4 +50,8 @@ istruc save_area
   at save_area.rsp,     dq save_area_rsp
   at save_area.rip,     dq save_area_rip
   ; TODO: Whatever other registers that should be saved.
+  at save_area.user0,   dq save_area_user0
+  at save_area.user1,   dq save_area_user1
+  at save_area.user2,   dq save_area_user2
+  at save_area.user_undef,  times  save_area_size - save_area.user_undef  db 0
 iend

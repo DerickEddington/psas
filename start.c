@@ -18,12 +18,62 @@
 #include <errno.h>
 #include <error.h>
 #include <stdio.h>
+#ifdef DEBUG
+  #include <signal.h>
+#endif
 
 #include "system_interface.h"
 
 
 #define YES 1
 #define NO 0
+
+
+#ifdef DEBUG
+#define dprintf(...) fprintf(stderr, __VA_ARGS__);
+#else
+#define dprintf(...) ;
+#endif
+
+
+#ifdef DEBUG
+static void sigsegv_print (int signum, siginfo_t* si, void* ctxt)
+{
+  void w (char* m, size_t s) { write(STDERR_FILENO, m, s); }
+  void hw (uintptr_t x) {
+    static char hex[] = {'0','1','2','3','4','5','6','7',
+                         '8','9','A','B','C','D','E','F'};
+    for (int c = (sizeof(uintptr_t) * 2) - 1; c >= 0; c--) {
+      unsigned int i = (x & (((uintptr_t)0xF) << 4*c)) >> 4*c;
+      w(&hex[i], 1);
+    }
+  }
+  static char m1[] = "\nSIGSEGV: ";
+  static char m2[] = "SEGV_MAPERR: ";
+  static char m3[] = "SEGV_ACCERR: ";
+  static char m4[] = "UNKNOWN(";
+  static char m5[] = ") ";
+  w(m1, sizeof(m1) - 1);
+  switch (si->si_code) {
+  case SEGV_MAPERR:
+    w(m2, sizeof(m2) - 1);
+    break;
+  case SEGV_ACCERR:
+    w(m3, sizeof(m3) - 1);
+    break;
+  default:
+    w(m4, sizeof(m4) - 1);
+    hw(si->si_code);
+    w(m5, sizeof(m5) - 1);
+  }
+  hw((uintptr_t) si->si_addr);
+  w("\n", 1);
+  // Allow this handler to return, so that the faulting instruction will be
+  // retried again, now that the handler is uninstalled (because it was
+  // installed SA_RESETHAND), which should cause SIGSEGV again but it won't be
+  // handled by this handler.
+}
+#endif
 
 
 static void die (const char* who, const char* msg, int e) {
@@ -88,11 +138,11 @@ static int parse_addr (const char* str, const void** addr)
                    &addrstr[0], &addrstr[4], &addrstr[8], &addrstr[12]);
   if (sfn != 4) return YES;
   addrstr[sizeof(addrstr) - 1] = '\0';
-  //printf("addrstr=%s\n", addrstr);
+  //dprintf("addrstr=%s\n", addrstr);
   const void* addr_;
   sfn = sscanf(addrstr, "%p", &addr_);
   if (sfn != 1) return YES;
-  //printf("addr_=%p\n", addr_);
+  //dprintf("addr_=%p\n", addr_);
   *addr = addr_;
   return NO;  // No error.
 }
@@ -103,12 +153,12 @@ static int segment_filename_to_addr (const char* name,
                                      int* mprot)
 {
   if (parse_addr(name, addr)) return YES;
-  //printf("*addr=%p\n", *addr);
+  //dprintf("*addr=%p\n", *addr);
   char segR, segW, segX;
   int sfn = sscanf(&name[SEGMENT_FILENAME_STRSIZE - (3+1)], "%c%c%c",
                    &segR, &segW, &segX);
   if (sfn != 3) return YES;
-  //printf("segR=%c, segW=%c, segX=%c\n", segR, segW, segX);
+  //dprintf("segR=%c, segW=%c, segX=%c\n", segR, segW, segX);
   int mprot_ = 0;
   if (segR != 'R' && segW != 'W' && segX != 'X') mprot_ = PROT_NONE;
   if (segR == 'R') mprot_ |= PROT_READ;
@@ -125,6 +175,8 @@ static const char* alloc_segment_filename = ".alloc_segment_1";
 static void* alloc_segment (size_t length, int mprot)
 {
   void fail (const char* msg) { die("alloc_segment", msg, YES); }
+
+  dprintf("alloc_segment (%zu, %d) : ", length, mprot);
 
   // First, open for writing to make it the given size.
   int fd = openat(segments_dirfd, alloc_segment_filename,
@@ -149,6 +201,8 @@ static void* alloc_segment (size_t length, int mprot)
     if(unlinkat(segments_dirfd, alloc_segment_filename, 0)) fail("unlinkat");
   }
   if(close(fd)) fail("close");
+
+  dprintf("%p\n", addr);
   return addr;  // Might be MAP_FAILED
 }
 
@@ -156,6 +210,8 @@ static void* alloc_segment (size_t length, int mprot)
 static int free_segment (const void* addr)
 {
   void fail (const char* msg) { die("free_segment", msg, YES); }
+
+  dprintf("free_segment (%p) : ", addr);
 
   struct stat st;
 
@@ -178,6 +234,8 @@ static int free_segment (const void* addr)
 
   if(munmap((void*)addr, st.st_size)) return YES;  // Error: munmap error.
   if(unlinkat(segments_dirfd, fn, 0)) fail("unlinkat");
+
+  dprintf("OK\n");
   return NO;  // No error.
 }
 
@@ -244,7 +302,7 @@ int main (int argc, const char** argv)
 
     for (int i = 0; i < sdn; i++) {
       const char* name = namelist[i]->d_name;
-      //printf("%s\n", name);
+      dprintf("Segment file: %s\n", name);
       const void* addr;
       int mprot;
       if (segment_filename_to_addr(name, &addr, &mprot))
@@ -267,6 +325,7 @@ int main (int argc, const char** argv)
   }
 
   void transfer_control (void) {
+    dprintf("------ Transferring Control ------\n");
     entry_point(&sys_iface);
   }
 
@@ -299,6 +358,15 @@ int main (int argc, const char** argv)
     if (segment_filename_to_addr(target, (const void**) &entry_point, &mprot))
       invalid_args();
   }
+
+#ifdef DEBUG
+  // Install SIGSEGV handler that prints, to help debugging.
+  struct sigaction sa;
+  sa.sa_flags = SA_SIGINFO | SA_RESETHAND;
+  sa.sa_sigaction = sigsegv_print;
+  if (sigaction(SIGSEGV, &sa, NULL)) fail("sigaction");
+  //*((int*)0x00007123456789A0) = 123;  // Cause SIGSEGV to test.
+#endif
 
   initialize();
   transfer_control();

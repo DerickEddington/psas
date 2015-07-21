@@ -4,16 +4,18 @@ set -e
 set -u
 
 topdir=$(readlink -f $(dirname $0))
-source $topdir/build-defs.bash
+psas_dir=$(readlink -f $topdir/../..)
+
+source $psas_dir/build-defs.bash
+
 pushd $topdir
 echo "Cleaning..."
 
 shopt -s globstar
 
 to_delete=(
-    start
     **/*.{o,bin}
-    util/{mmap-something,system_interface_offsets}
+    **/*.{map,offset}
     **/*.{disasm,hexdump}
 )
 

@@ -10,6 +10,7 @@ bits 64
 %define carg4_rcx rcx
 %define carg5_r8  r8
 %define carg6_r9  r9
+%define cret1_rax rax
 
 ; Align procedure entry-points.
 %macro proc 1
@@ -76,8 +77,14 @@ struc save_area
   .rsp:     resq 1
   .rip:     resq 1
   ; TODO: Whatever other registers that should be saved.
+  alignb 128  ; Align to cache-line to help locality of user data.
   .user:
   ; The rest is available for the user.
+  .user0: resq 1
+  .user1: resq 1
+  .user2: resq 1
+  ; More .userN convenience labels could be declared if needed.
+  .user_undef:
   alignb PAGESIZE
 endstruc
 
@@ -92,7 +99,7 @@ endstruc
 
   ; Reinstate the C stack pointer and save the current.  The saved C rsp is
   ; expected to already be 32-byte aligned.
-  xchg rsp, [save_area_location + save_area.c_rsp]
+  xchg rsp, [abs save_area_location + save_area.c_rsp]
 
   ;emms  ; TODO: Is this good, to expect this to already be handled?
   ; TODO: What about other stuff like the MXCSR register and x87 status word?
@@ -104,5 +111,41 @@ endstruc
   ; Call the given procedure.
   call [abs save_area_location + save_area.sysif + system_interface.%1]
   ; Restore the stack pointer and re-save the C one.
-  xchg rsp, [save_area_location + save_area.c_rsp]
+  xchg rsp, [abs save_area_location + save_area.c_rsp]
+%endmacro
+
+
+%macro debug_write 1+
+%ifdef DEBUG
+  ; Save the registers that are not preserved across procedure calls according
+  ; to the C ABI.
+  push rax
+  push rcx
+  push rdx
+  push rsi
+  push rdi
+  push r8
+  push r9
+  push r10
+  push r11
+  ; TODO: Save others that might need it, like the xmm registers?
+
+  lea carg1_rdi, [rel %%msg]
+  mov carg2_rsi, %%msg_end - %%msg
+  call_sysintf console_write
+
+  pop r11
+  pop r10
+  pop r9
+  pop r8
+  pop rdi
+  pop rsi
+  pop rdx
+  pop rcx
+  pop rax
+
+  jmp %%msg_end
+%%msg: db %1,0
+%%msg_end:
+%endif
 %endmacro
